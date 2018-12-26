@@ -35,6 +35,11 @@ else:
 #     'sheep', 'sofa', 'train', 'tvmonitor')
 VOC_CLASSES = (  # always index 0
     'pedestrian', 'head', 'pedestrian_side')
+VOC_COLOR_ID_MAP = {
+    0:(240, 0, 0),
+    1:(0, 0, 240),
+    2:(0, 240, 0)
+}
 
 # note: if you used our download scripts, this should be right
 VOC_ROOT = osp.join(HOME, "data/VOCdevkit/")
@@ -125,7 +130,6 @@ class VOCDetection(data.Dataset):
 
     def __getitem__(self, index):
         im, gt, h, w = self.pull_item(index)
-
         return im, gt
 
     def __len__(self):

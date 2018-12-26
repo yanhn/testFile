@@ -34,13 +34,24 @@ def detection_collate(batch):
         targets.append(torch.FloatTensor(sample[1]))
     return torch.stack(imgs, 0), targets
 
+def getNumpy_collate(batch):
+    '''
+    Used to convert tensor data into numpy and show it directly, no need to Tensorize it and deTensorize it.
+    :param batch:
+    :return:
+    '''
+    targets = []
+    imgs = []
+    for sample in batch:
+        imgs.append(sample[0].numpy())
+        targets.append(sample[1])
+    return imgs, targets
 
 def base_transform(image, size, mean):
     x = cv2.resize(image, (size, size)).astype(np.float32)
     x -= mean
     x = x.astype(np.float32)
     return x
-
 
 class BaseTransform:
     def __init__(self, size, mean):
