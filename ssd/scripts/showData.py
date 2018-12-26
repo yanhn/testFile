@@ -14,6 +14,8 @@ from data import getNumpy_collate
 from data.augmentation import SSDAugmentationGray, SSDAugmentationTest
 import torch.utils.data as torchData
 import cv2
+from utils import *
+import logging
 
 def showData():
     dataDir = r'/mnt/hdisk1/trainSet/pytorch/antifollow'
@@ -29,6 +31,8 @@ def showData():
                                   shuffle=False, collate_fn= getNumpy_collate,
                                   pin_memory=True)
     batch_iterator = iter(data_loader)
+
+    picCount = 0
     while(True):
         try:
             images, targets = next(batch_iterator)
@@ -46,9 +50,14 @@ def showData():
             for rect in targets[i]:
                 cv2.rectangle(imgColor, (int(rect[0]*imWidth), int(rect[1]*imHeight)), (int(rect[2]*imWidth), int(rect[3]*imHeight)), VOC_COLOR_ID_MAP[int(rect[4])])
 
+            picCount += 1
+            print(picCount)
+
             cv2.imshow("input", imgColor)
             cv2.waitKey()
 
 if __name__ == "__main__":
+    console_output()
+    logging.info("hello from logger.")
     showData()
     print("done")

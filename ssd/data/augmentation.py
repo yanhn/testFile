@@ -14,6 +14,7 @@ import cv2
 import numpy as np
 import types
 from numpy import random
+from utils import *
 
 def intersect(box_a, box_b):
     max_xy = np.minimum(box_a[:, 2:], box_b[2:])
@@ -39,6 +40,18 @@ def jaccard_numpy(box_a, box_b):
               (box_b[3]-box_b[1]))  # [A,B]
     union = area_a + area_b - inter
     return inter / union  # [A,B]
+
+def interOverRectA(box_a, box_b):
+    '''
+    intersect over box A, NOT over union
+    :param box_a:
+    :param box_b:
+    :return:
+    '''
+    inter = intersect(box_a, box_b)
+    area_a = ((box_a[:, 2]-box_a[:, 0]) *
+              (box_a[:, 3]-box_a[:, 1]))
+    return inter / area_a
 
 class Compose(object):
     """Composes several augmentations together.
@@ -255,7 +268,7 @@ class RandomSampleCrop(object):
             boxes (Tensor): the adjusted bounding boxes in pt form
             labels (Tensor): the class labels for each bbox
     """
-    def __init__(self):
+    def __init__(self, leastBorderGap = 0):
         self.sample_options = (
             # using entire original input image
             None,
@@ -267,6 +280,7 @@ class RandomSampleCrop(object):
             # randomly sample a patch
             (None, None),
         )
+        self._leastBorderGap = leastBorderGap
 
     def __call__(self, image, boxes=None, labels=None):
         try:
@@ -274,6 +288,8 @@ class RandomSampleCrop(object):
         except:
             height, width = image.shape
         # height, width, _ = image.shape
+        insterestedCanvas = np.array([int(width * self._leastBorderGap), int(height * self._leastBorderGap),
+                                      width - int(width * self._leastBorderGap), height - int(height * self._leastBorderGap)])
         while True:
             # randomly choose a mode
             mode = random.choice(self.sample_options)
@@ -310,6 +326,11 @@ class RandomSampleCrop(object):
                 if overlap.min() < min_iou and max_iou < overlap.max():
                     continue
 
+                # not used for now
+                # focusedOverlap = interOverRectA(boxes, insterestedCanvas)
+                # if(focusedOverlap.min() < 0.6):
+                #     continue
+
                 # cut the crop from the image
                 try:
                     current_image = current_image[rect[1]:rect[3], rect[0]:rect[2], :]
@@ -325,11 +346,39 @@ class RandomSampleCrop(object):
                 # mask in all gt boxes that under and to the right of centers
                 m2 = (rect[2] > centers[:, 0]) * (rect[3] > centers[:, 1])
 
+                # use full box to filter instead of center
+                m1HasPartsImgButNoBox = []
+                for i in range(centers.shape[0]):
+                    if (m1[i]):
+                        m1HasPartsImgButNoBox.append(False)
+                    else:
+                        if(rect[0] < boxes[i, 2] and rect[1] < boxes[i, 3]):
+                            m1HasPartsImgButNoBox.append(True)
+                        else:
+                            m1HasPartsImgButNoBox.append(False)
+                m2HasPartsImgButNoBox = []
+                for i in range(centers.shape[0]):
+                    if (m2[i]):
+                        m2HasPartsImgButNoBox.append(False)
+                    else:
+                        if(rect[0] > boxes[i, 0] and rect[1] > boxes[i, 1]):
+                            m2HasPartsImgButNoBox.append(True)
+                        else:
+                            m2HasPartsImgButNoBox.append(False)
+                if(np.array(m1HasPartsImgButNoBox).any() or np.array(m2HasPartsImgButNoBox).any()):
+                    continue
+
                 # mask in that both m1 and m2 are true
                 mask = m1 * m2
 
                 # have any valid boxes? try again if not
                 if not mask.any():
+                    continue
+
+                # special case: filter all parts cls (idx = 2 for pedestrian_side)
+                idxInUse = labels[mask]
+                cmpResult = (idxInUse == 2)
+                if (cmpResult.all()):
                     continue
 
                 # take only matching gt boxes
@@ -350,6 +399,9 @@ class RandomSampleCrop(object):
                 current_boxes[:, 2:] -= rect[:2]
 
                 return current_image, current_boxes, current_labels
+
+            logging.info("Run out of 50 tries during RandomSampleCrop.")
+            return image, boxes, labels
 
 class Expand(object):
     #make border
@@ -431,7 +483,6 @@ class SwapChannels(object):
         image = image[:, :, self.swaps]
         return image
 
-
 class PhotometricDistort(object):
     def __init__(self):
         self.pd = [
@@ -455,7 +506,6 @@ class PhotometricDistort(object):
             distort = Compose(self.pd[1:])
         im, boxes, labels = distort(im, boxes, labels)
         return self.rand_light_noise(im, boxes, labels)
-
 
 class SSDAugmentation(object):
     def __init__(self, size=300, mean=(104, 117, 123)):
@@ -506,9 +556,9 @@ class SSDAugmentationTest(object):
             ToAbsoluteCoordsGray(),
             # RandomContrast(),
             # # PhotometricDistort(), # single cahnnel
-            Expand(self.mean, 2),
+            # Expand(self.mean, 2),
             RandomSampleCrop(),
-            RandomMirror(),
+            # RandomMirror(),
             ToPercentCoords(),
             Resize(self.size),
             # SubtractMeans(self.mean),
