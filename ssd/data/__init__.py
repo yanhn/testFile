@@ -13,6 +13,7 @@ from .config import *
 import torch
 import cv2
 import numpy as np
+from data.augmentation import FFTTrans
 
 def detection_collate(batch):
     """Custom collate fn for dealing with batches of images that have a different
@@ -54,9 +55,14 @@ def base_transform(image, size, mean):
     return x
 
 class BaseTransform:
-    def __init__(self, size, mean):
+    def __init__(self, size, mean, useFFT=False):
         self.size = size
         self.mean = np.array(mean, dtype=np.float32)
+        self._fftTransform = FFTTrans()
+        self._useFFT = useFFT
 
     def __call__(self, image, boxes=None, labels=None):
-        return base_transform(image, self.size, self.mean), boxes, labels
+        im, box, label = base_transform(image, self.size, self.mean), boxes, labels
+        if (self._useFFT):
+            im, box, label = self._fftTransform(im, box, label)
+        return im, box, label

@@ -15,7 +15,8 @@ def getTimeString():
     timeString = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
     return timeString
 
-logging.basicConfig(filename=os.getcwd() + "/../log/" + getTimeString() + ".log")
+# os.getcwd()
+logging.basicConfig(filename=os.path.realpath(__file__) + "/../../log/" + getTimeString() + ".log")
 bannerLogger = logging.getLogger()
 bannerLogger.setLevel(logging.INFO)
 
