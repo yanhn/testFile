@@ -8,7 +8,7 @@
 @desc: modify & copy crom https://github.com/amdegroot/ssd.pytorch
 '''
 
-from .voc0712 import VOCDetection, VOCAnnotationTransform, VOC_CLASSES, VOC_ROOT
+from .voc0712 import VOCDetection, VOCAnnotationTransform, VOC_CLASSES, VOC_ROOT, VOC_COLOR_ID_MAP
 from .config import *
 import torch
 import cv2
