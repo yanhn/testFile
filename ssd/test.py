@@ -14,19 +14,22 @@ import argparse
 import torch
 import torch.backends.cudnn as cudnn
 from torch.autograd import Variable
-from data import VOC_ROOT, VOC_CLASSES as labelmap
-from data import VOCAnnotationTransform, VOCDetection, BaseTransform, VOC_CLASSES, VOC_COLOR_ID_MAP
+from data import BaseTransform, VOC_CLASSES, VOC_COLOR_ID_MAP
 from nets.ssd import build_ssd
 import cv2
 import numpy as np
+import eval.BBoxXmlTool as bxt
+from utils import *
 
 parser = argparse.ArgumentParser(description='Single Shot MultiBox Detection')
-parser.add_argument('--trained_model', default='weights/ssd300_3cls_cont110000_fft.pth',
+parser.add_argument('--trained_model', default='weights/ssd300_3cls_cont110000_fftLessPad.pth',
                     type=str, help='Trained state_dict file path to open')
 parser.add_argument('--testImgDir', default='/mnt/hdisk1/testSet/antiFollow/AntiFollowTest/JPEGImages', type=str,
                     help='Dir to load test img from')
-parser.add_argument('--save_folder', default='eval/', type=str,
-                    help='Dir to save results')
+parser.add_argument('--action', default='show', type=str, choices=['show', 'draw', 'xml'],
+                    help='use demo to to what?')
+parser.add_argument('--saveXMLPath', default='log/', type=str,
+                    help='output xml path')
 parser.add_argument('--visualThreshold', default=0.6, type=float,
                     help='Final confidence threshold')
 parser.add_argument('--cuda', default=True, type=bool,
@@ -35,6 +38,7 @@ parser.add_argument('--useFFT', default=True, type=bool,
                     help='Use fft preprocess or not')
 parser.add_argument('--inputChannel', default=3, type=int,
                     help='Number of input channel')
+
 args = parser.parse_args()
 
 if args.cuda and torch.cuda.is_available():
@@ -42,10 +46,8 @@ if args.cuda and torch.cuda.is_available():
 else:
     torch.set_default_tensor_type('torch.FloatTensor')
 
-if not os.path.exists(args.save_folder):
-    os.mkdir(args.save_folder)
 
-def test_net_draw_dir(testDir, net, transform, thresh):
+def testNetDrawDir(testDir, net, transform, thresh):
     for root, dirs, files in os.walk(testDir):
         for file in files:
             picDir = os.path.join(root, file)
@@ -119,10 +121,41 @@ def DetectImgWithNet(net, frame, transform, thresh):
     print("Time cost: {} ms.".format((tEnd - tStart) / cv2.getTickFrequency() * 1000))
     return retBBoxs
 
-def testSaveXmlDir(testDir, net, transform, thresh):
-    all_boxes = [[] for _ in VOC_CLASSES]
-    pass
+def testSaveXmlDir(testDir, net, transform, thresh, display=False):
+    modelCode, _ = os.path.splitext(args.trained_model.split('/')[-1])
+    saveXMLDir = args.saveXMLPath + getTimeString() + "_" + modelCode + "_xml"
+    if not os.path.isdir(saveXMLDir): os.makedirs(saveXMLDir)
+    if (display):
+        saveDisplayDir = args.saveXMLPath + getTimeString() + "_" + modelCode + "_display"
+        if not os.path.isdir(saveDisplayDir): os.makedirs(saveDisplayDir)
 
+    for root, dirs, files in os.walk(testDir):
+        totalPicNum = len(files)
+        picCounter = 0
+        for file in files:
+            picDir = os.path.join(root, file)
+            img = cv2.imread(picDir, 0)
+            bboxs = DetectImgWithNet(net, img, transform, thresh)
+
+            tmpBXT = bxt.IMGBBox()
+            tmpBXT.setIMG(img)
+            tmpBXT.img_name = os.path.basename(picDir)
+            fname, _ = os.path.splitext(tmpBXT.img_name)
+            tmpBXT.xml_name = fname + '.xml'
+
+            for cls_idx in range(len(VOC_CLASSES)):
+
+                # can have class filter here
+                #
+
+                cls_name = VOC_CLASSES[cls_idx]
+                tmpBXT.addDet(bboxs[cls_idx], cls_name)
+            if len(tmpBXT.bboxes) > 0:
+                picCounter += 1
+                tmpBXT.saveXML(save_dir=saveXMLDir)
+                if (display):
+                    tmpBXT.showIMG(save_dir=saveDisplayDir)
+            logging.info("Detected {} of {}.".format(picCounter, totalPicNum))
 
 def test_voc():
     # load net
@@ -131,15 +164,19 @@ def test_voc():
     net.load_state_dict(torch.load(args.trained_model))
     net.eval()
     print('Finished loading model!')
-    # load data
-    # testset = VOCDetection(args.voc_root, [('2007', 'test')], None, VOCAnnotationTransform())
+
     if args.cuda:
         net = net.cuda()
         cudnn.benchmark = True
 
-    test_net_draw_dir(args.testImgDir, net, BaseTransform(net.size, (120), useFFT=args.useFFT), args.visualThreshold)
-
+    if (args.action == 'show'):
+        testNetDrawDir(args.testImgDir, net, BaseTransform(net.size, (120), useFFT=args.useFFT), args.visualThreshold)
+    elif(args.action == 'xml'):
+        testSaveXmlDir(args.testImgDir, net, BaseTransform(net.size, (120), useFFT=args.useFFT), args.visualThreshold)
+    elif(args.action == 'draw'):
+        testSaveXmlDir(args.testImgDir, net, BaseTransform(net.size, (120), useFFT=args.useFFT), args.visualThreshold, display=True)
 
 if __name__ == '__main__':
+    console_output()
     test_voc()
     print("Done")
