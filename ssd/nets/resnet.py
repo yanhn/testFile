@@ -33,21 +33,21 @@ pretrained_settings = {
     }
 }
 
-def conv3x3(in_planes, out_planes, stride=1):
+def conv3x3(in_planes, out_planes, stride=1, moduleName=""):
     "3x3 convolution with padding"
-    return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride,
-                     padding=1, bias=True)
+    return nets.setLayName(nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride,
+                     padding=1, bias=True), moduleName)
 
 class BasicBlock(nn.Module):
     expansion = 1
 
-    def __init__(self, inplanes, planes, stride=1, downsample=None):
+    def __init__(self, inplanes, planes, stride=1, downsample=None, prefix=""):
         super(BasicBlock, self).__init__()
-        self.conv1 = conv3x3(inplanes, planes, stride)
-        self.bn1 = nn.BatchNorm2d(planes)
-        self.relu = nn.ReLU(inplace=True)
-        self.conv2 = conv3x3(planes, planes)
-        self.bn2 = nn.BatchNorm2d(planes)
+        self.conv1 = conv3x3(inplanes, planes, stride, moduleName = prefix + "conv1")
+        self.bn1 = nets.setLayName(nn.BatchNorm2d(planes), prefix + "bn1")
+        self.relu = nets.setLayName(nn.ReLU(inplace=True), prefix + "relu")
+        self.conv2 = conv3x3(planes, planes, moduleName = prefix + "conv2")
+        self.bn2 = nets.setLayName(nn.BatchNorm2d(planes), prefix + "bn2")
         self.downsample = downsample
         self.stride = stride
 
@@ -110,7 +110,7 @@ class Bottleneck(nn.Module):
 
 class FBResNet(nn.Module):
 
-    def __init__(self, block, layers, num_classes=1000):
+    def __init__(self, block, layers, inputNum=3, num_classes=1000):
         self.inplanes = 64
         # Special attributs
         self.input_space = None
@@ -119,17 +119,18 @@ class FBResNet(nn.Module):
         self.std = None
         super(FBResNet, self).__init__()
         # Modules
-        self.conv1 = nets.setLayName(nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3,
+        self.conv1 = nets.setLayName(nn.Conv2d(inputNum, 64, kernel_size=7, stride=2, padding=3,
                                 bias=True), 'conv1')
         self.bn1 = nets.setLayName(nn.BatchNorm2d(64), 'bn1')
         self.relu = nets.setLayName(nn.ReLU(inplace=True), 'relu')
         self.maxpool = nets.setLayName(nn.MaxPool2d(kernel_size=3, stride=2, padding=1), 'maxpool')
-        self.layer1 = self._make_layer(block, 64, layers[0])
-        self.layer2 = self._make_layer(block, 128, layers[1], stride=2)
-        self.layer3 = self._make_layer(block, 256, layers[2], stride=2)
-        self.layer4 = self._make_layer(block, 512, layers[3], stride=2)
-        self.avgpool = nn.AvgPool2d(7)
-        self.last_linear = nn.Linear(512 * block.expansion, num_classes)
+
+        self.layer1 = self._make_layer(block, 64, layers[0], stride=1, prefixName='resBlock1/')
+        self.layer2 = self._make_layer(block, 128, layers[1], stride=2, prefixName='resBlock2/')
+        self.layer3 = self._make_layer(block, 256, layers[2], stride=2, prefixName='resBlock3/')
+        self.layer4 = self._make_layer(block, 512, layers[3], stride=2, prefixName='resBlock4/')
+        self.avgpool = nets.setLayName(nn.AvgPool2d(7), 'avgpool')
+        self.last_linear = nets.setLayName(nn.Linear(512 * block.expansion, num_classes), 'linear')
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
@@ -139,20 +140,20 @@ class FBResNet(nn.Module):
                 m.weight.data.fill_(1)
                 m.bias.data.zero_()
 
-    def _make_layer(self, block, planes, blocks, stride=1):
+    def _make_layer(self, block, planes, blocks, stride=1, prefixName='block'):
         downsample = None
         if stride != 1 or self.inplanes != planes * block.expansion:
             downsample = nn.Sequential(
-                nn.Conv2d(self.inplanes, planes * block.expansion,
-                          kernel_size=1, stride=stride, bias=True),
-                nn.BatchNorm2d(planes * block.expansion),
+                nets.setLayName(nn.Conv2d(self.inplanes, planes * block.expansion,
+                          kernel_size=1, stride=stride, bias=True), prefixName + 'dw/conv'),
+                nets.setLayName(nn.BatchNorm2d(planes * block.expansion), prefixName + 'dw/bn')
             )
 
         layers = []
-        layers.append(block(self.inplanes, planes, stride, downsample))
+        layers.append(block(self.inplanes, planes, stride, downsample, prefix = prefixName + "step0/"))
         self.inplanes = planes * block.expansion
         for i in range(1, blocks):
-            layers.append(block(self.inplanes, planes))
+            layers.append(block(self.inplanes, planes, prefix = prefixName + "step" + str(i) + "/"))
 
         return nn.Sequential(*layers)
 
@@ -164,10 +165,10 @@ class FBResNet(nn.Module):
         x = self.maxpool(x)
 
         x = self.layer1(x)
-        x = self.layer2(x)
-        x = self.layer3(x)
-        x = self.layer4(x)
-        return x
+        xStride8 = self.layer2(x)
+        xStride16 = self.layer3(xStride8)
+        xStride32 = self.layer4(xStride16)
+        return [xStride8, xStride16, xStride32]
 
     def logits(self, features):
         x = self.avgpool(features)
@@ -176,17 +177,20 @@ class FBResNet(nn.Module):
         return x
 
     def forward(self, input):
+        # origin featExstract and logic regression
+        #
+        # x = self.logits(x)
+
         x = self.features(input)
-        x = self.logits(x)
         return x
 
 
-def fbresnet18(num_classes=1000):
+def fbresnet18(inputNum=3, num_classes=1000):
     """Constructs a ResNet-18 model.
     Args:
         pretrained (bool): If True, returns a model pre-trained on ImageNet
     """
-    model = FBResNet(BasicBlock, [2, 2, 2, 2], num_classes=num_classes)
+    model = FBResNet(BasicBlock, [2, 2, 2, 2], inputNum=inputNum, num_classes=num_classes)
     return model
 
 
