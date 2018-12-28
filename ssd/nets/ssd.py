@@ -5,7 +5,7 @@
 @contact: double4tar@gmail.com
 @file: ssd.py
 @time: 18-12-27 上午10:20
-@desc: modify & copy crom https://github.com/amdegroot/ssd.pytorch
+@desc: modify & copy from https://github.com/amdegroot/ssd.pytorch
 '''
 
 import torch

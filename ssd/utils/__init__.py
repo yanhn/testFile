@@ -12,7 +12,7 @@ import logging
 import time
 
 def getTimeString():
-    timeString = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+    timeString = time.strftime("%Y-%m-%d_%H:%M:%S", time.localtime())
     return timeString
 
 # os.getcwd()
