@@ -400,7 +400,7 @@ class RandomSampleCrop(object):
 
                 return current_image, current_boxes, current_labels
 
-            logging.info("Run out of 50 tries during RandomSampleCrop.")
+            # logging.info("Run out of 50 tries during RandomSampleCrop.")
             return image, boxes, labels
 
 class Expand(object):
@@ -535,7 +535,7 @@ class SSDAugmentationGray(object):
             ToAbsoluteCoordsGray(),
             RandomContrast(),
             # PhotometricDistort(), # single cahnnel
-            Expand(self.mean),
+            Expand(self.mean, 2),
             RandomSampleCrop(),
             RandomMirror(),
             ToPercentCoords(),

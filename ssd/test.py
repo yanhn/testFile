@@ -26,11 +26,11 @@ parser.add_argument('--trained_model', default='weights/ssd300_3cls_cont110000_f
                     type=str, help='Trained state_dict file path to open')
 parser.add_argument('--testImgDir', default='/mnt/hdisk1/testSet/antiFollow/AntiFollowTest/JPEGImages', type=str,
                     help='Dir to load test img from')
-parser.add_argument('--action', default='show', type=str, choices=['show', 'draw', 'xml'],
+parser.add_argument('--action', default='xml', type=str, choices=['show', 'draw', 'xml'],
                     help='use demo to to what?')
 parser.add_argument('--saveXMLPath', default='log/', type=str,
                     help='output xml path')
-parser.add_argument('--visualThreshold', default=0.6, type=float,
+parser.add_argument('--visualThreshold', default=0.005, type=float,
                     help='Final confidence threshold')
 parser.add_argument('--cuda', default=True, type=bool,
                     help='Use cuda to train model')

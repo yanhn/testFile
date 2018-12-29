@@ -14,6 +14,7 @@ from nets.resnet import fbresnet18
 from nets import *
 from torch.autograd import Variable
 from data.config import voc
+import os
 
 RES_SSD_CONFIG = {
     "300" : {
@@ -46,7 +47,7 @@ class extraFeats(nn.Module):
                 tmpSequential = nn.Sequential(*tmpSequential)
                 self._extras.append(tmpSequential)
             lastLayerOutputChanel = v
-
+        self._extras = nn.ModuleList(self._extras)
         self._initialize_weights()
 
     def forward(self, input):
@@ -94,6 +95,8 @@ class resSSD(nn.Module):
             self.softmax = nn.Softmax(dim=-1)
             self.detect = Detect(self._numClasses, 0, 200, 0.01, 0.45)
 
+        self._loc_layers = nn.Sequential(*self._loc_layers)
+        self._conf_layers = nn.Sequential(*self._conf_layers)
         self._initialize_weights()
 
     def forward(self, input):
@@ -121,11 +124,18 @@ class resSSD(nn.Module):
                 self.priors.type(type(input.data))                  # default boxes
             )
         else:
-            output = (
-                loc.view(loc.size(0), -1, 4),
-                conf.view(conf.size(0), -1, self._numClasses),
-                self.priors
-            )
+            if (input.device == 'cuda'):
+                output = (
+                    loc.view(loc.size(0), -1, 4),
+                    conf.view(conf.size(0), -1, self._numClasses),
+                    self.priors.cuda()
+                )
+            else:
+                output = (
+                    loc.view(loc.size(0), -1, 4),
+                    conf.view(conf.size(0), -1, self._numClasses),
+                    self.priors.cuda()
+                )
         return output
 
     def _initialize_weights(self):
@@ -141,3 +151,13 @@ class resSSD(nn.Module):
                 # nn.init.kaiming_normal_(m.weight, mode='fan_out')
                 if m.bias is not None:
                     m.bias.data.zero_()
+
+    def load_weights(self, base_file):
+        other, ext = os.path.splitext(base_file)
+        if ext == '.pkl' or '.pth':
+            print('Loading weights into state dict...')
+            self.load_state_dict(torch.load(base_file,
+                                 map_location=lambda storage, loc: storage))
+            print('Finished!')
+        else:
+            print('Sorry only .pth and .pkl files supported.')

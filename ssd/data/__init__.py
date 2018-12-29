@@ -13,7 +13,7 @@ from .config import *
 import torch
 import cv2
 import numpy as np
-from data.augmentation import FFTTrans
+from data.augmentation import FFTTrans, SSDAugmentationGray
 
 def detection_collate(batch):
     """Custom collate fn for dealing with batches of images that have a different
