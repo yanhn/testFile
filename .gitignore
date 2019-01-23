@@ -2,3 +2,7 @@
 __pycache__
 log
 weights
+
+# cifar data
+fast.ai/cifar/data/raw
+fast.ai/cifar/data/cifar-10-python.tar.gz
