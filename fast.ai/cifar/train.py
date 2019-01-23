@@ -15,6 +15,11 @@ import numpy as np
 import torch.nn as nn
 from torch import optim
 from model import baseConv
+from model import resnet
+
+import os
+import logging
+import time
 
 def parsArgs():
     parser = argparse.ArgumentParser()
@@ -23,9 +28,10 @@ def parsArgs():
     parser.add_argument('--dataSet', type=str, default="Cifar10")
     parser.add_argument('--cifar10_path', type=str, default="./data/raw")
     parser.add_argument('--batch_size', type=int, default=32)
-    parser.add_argument('--num_workers', type=int, default=8)
+    parser.add_argument('--num_workers', type=int, default=2)
 
     config = parser.parse_args()
+    logging.info(config)
     return config
 
 def showDataAndLabel(dataIter):
@@ -60,7 +66,8 @@ def trainCls(config):
     # showDataAndLabel(cifar10_iter)
 
     # model
-    myCls = baseConv.baseClassfier(3, 10)
+    myCls = resnet.ResNet18()
+    # myCls = baseConv.baseClassfier(3, 10)
     if torch.cuda.is_available():
         myCls.cuda()
     myCls.train()
@@ -69,14 +76,19 @@ def trainCls(config):
     criterion = nn.CrossEntropyLoss()
 
     # optimizer
-    optimizer = optim.SGD(myCls.parameters(), lr=0.01, momentum=0.9)
+    optimizer = optim.SGD(myCls.parameters(), lr=0.08, momentum=0.9)
 
-    for e in range(3):
+    for e in range(100):
+        cifar10_iter = iter(dataLoader)
+
+        trainLoss = 0
+        totalSample = 0
+        correctSample = 0
         for i in range(len(cifar10_iter)):      # total 50k, batchSize 32, len = 1563
             try:
                 images, targets = next(cifar10_iter)
             except StopIteration:
-                cifar10_iter = iter(dataLoader)
+                # cifar10_iter = iter(dataLoader)
                 # images, targets = next(cifar10_iter)
                 break
 
@@ -87,12 +99,61 @@ def trainCls(config):
             out = myCls(images)
             loss = criterion(out, targets)
             myCls.zero_grad()
-            if (i % 100 == 0):
-                print("epoch: {}, iter: {}, loss: {}".format(e, i, loss.data.item()))
+
+            trainLoss += loss.item()
+            _, predicted = out.max(1)
+            totalSample += targets.size(0)
+            correctSample += predicted.eq(targets).sum().item()
+
+
+            if ((i+1) % 200 == 0):
+                logging.info("epoch: {}, iter: {}, loss: {}, acc: {}".format(e, i, trainLoss / (i + 1), correctSample / totalSample))
+                # print("epoch: {}, iter: {}, loss: {}".format(e, i, loss.data.item()))
             loss.backward()
             optimizer.step()
 
+        # do validation
+        cifar10_test_iter = iter(testDataLoader)
+        valLoss = 0
+        valNum = 0
+        correctSample = 0
+        logging.info("Do validation")
+        for i in range(len(cifar10_test_iter)):
+            try:
+                images, targets = next(cifar10_test_iter)
+            except StopIteration:
+                break
+            valNum += images.shape[0]
+            if torch.cuda.is_available():
+                images = images.cuda()
+                targets = targets.cuda()
+            out = myCls(images)
+
+            valLoss += criterion(out, targets).item()
+            _, predicted = out.max(1)
+            totalSample += targets.size(0)
+            correctSample += predicted.eq(targets).sum().item()
+        logging.info("epoch: {}, loss: {}, acc: {}".format(e, valLoss / (i + 1), correctSample / totalSample))
+
+        # save checkpoint
     return
+
+def getTimeString():
+    timeString = time.strftime("%Y-%m-%d_%H:%M:%S", time.localtime())
+    return timeString
+
+logging.basicConfig(filename=os.path.realpath(__file__) + "/../log/" + getTimeString() + ".log")
+bannerLogger = logging.getLogger()
+bannerLogger.setLevel(logging.INFO)
+def console_output():
+    # define a Handler which writes INFO messages or higher to the sys.stderr
+    console = logging.StreamHandler()
+    console.setLevel(logging.INFO)
+    # set a format which is simpler for console use
+    # formatter = logging.Formatter('LINE %(lineno)-4d : %(levelname)-8s %(message)s')
+    # tell the handler to use this format
+    # console.setFormatter(formatter)
+    logging.getLogger('').addHandler(console)
 
 if __name__ == "__main__":
     # loss = nn.CrossEntropyLoss()
@@ -103,6 +164,6 @@ if __name__ == "__main__":
     # output = loss(input, target)
     # output.backward()
 
-
+    console_output()
     config = parsArgs()
     trainCls(config)

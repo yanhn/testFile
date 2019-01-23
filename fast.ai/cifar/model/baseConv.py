@@ -41,6 +41,11 @@ class baseClassfier(nn.Module):
         self.layer1 = conv_bn_relu(inChannel, 64, 3, "layer1", 2, 1, True)  # stride 2, featSize = 16
         self.layer2 = conv_bn_relu(64, 128, 3, "layer2", 2, 1, True)        # stride 2, featSize = 8
         self.layer3 = conv_bn_relu(128, 256, 3, "layer3", 2, 1, True)       # stride 2, featSize = 4
+
+        # self.layera = conv_bn_relu(256, 256, 3, "layera", 1, 1, True)       # stride 2, featSize = 4
+        # self.layerb = conv_bn_relu(256, 256, 3, "layerb", 1, 1, True)       # stride 2, featSize = 4
+        # self.layerc = conv_bn_relu(256, 256, 3, "layerc", 1, 1, True)       # stride 2, featSize = 4
+
         self.layer4 = conv_bn(256, 256, 4, "layer4", 1, 0, False)            # stride 4, featSize = 1
         self.fc = nn.Linear(256, numClass, bias=False)
         self.initWeights()
@@ -50,6 +55,11 @@ class baseClassfier(nn.Module):
         feat = self.layer1(x)
         feat = self.layer2(feat)
         feat = self.layer3(feat)
+
+        # feat = self.layera(feat)
+        # feat = self.layerb(feat)
+        # feat = self.layerc(feat)
+
         feat = self.layer4(feat)
         feat = self.fc(feat.view(batchSize, -1))
         out = F.softmax(feat)
