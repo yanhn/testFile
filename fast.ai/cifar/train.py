@@ -26,12 +26,15 @@ def parsArgs():
 
     parser.add_argument('--image_size', type=int, default=32)
     parser.add_argument('--dataSet', type=str, default="Cifar10")
+    parser.add_argument('--network', type=str, default="selfDefine")
+    # parser.add_argument('--network', type=str, default="res18")
     parser.add_argument('--cifar10_path', type=str, default="./data/raw")
     parser.add_argument('--batch_size', type=int, default=32)
     parser.add_argument('--num_workers', type=int, default=2)
-
+    parser.add_argument('--logPath', type=str, default="log/")          # relative dir to train.py
+    parser.add_argument('--savePrefix', type=str, default="save/")
+    parser.add_argument('--saveInterval', type=int, default=100)
     config = parser.parse_args()
-    logging.info(config)
     return config
 
 def showDataAndLabel(dataIter):
@@ -61,26 +64,27 @@ def trainCls(config):
     # data
     dataLoader = getDataLoader(config)
     testDataLoader = getTestDataLoader(config)
-    cifar10_iter = iter(dataLoader)
-    cifar10_test_iter = iter(testDataLoader)
+    # cifar10_iter = iter(dataLoader)
+    # cifar10_test_iter = iter(testDataLoader)
     # showDataAndLabel(cifar10_iter)
 
     # model
-    myCls = resnet.ResNet18()
-    # myCls = baseConv.baseClassfier(3, 10)
+    if config.network == "selfDefine":
+        myCls = baseConv.baseClassfier(3, 10)
+    elif config.network == "res18":
+        myCls = resnet.ResNet18()
     if torch.cuda.is_available():
         myCls.cuda()
-    myCls.train()
 
     # criterion
     criterion = nn.CrossEntropyLoss()
 
     # optimizer
-    optimizer = optim.SGD(myCls.parameters(), lr=0.08, momentum=0.9)
+    optimizer = optim.SGD(myCls.parameters(), lr=0.01, momentum=0.9)
 
-    for e in range(100):
+    for e in range(400):
         cifar10_iter = iter(dataLoader)
-
+        myCls.train()
         trainLoss = 0
         totalSample = 0
         correctSample = 0
@@ -114,8 +118,10 @@ def trainCls(config):
 
         # do validation
         cifar10_test_iter = iter(testDataLoader)
+        myCls.eval()
         valLoss = 0
         valNum = 0
+        totalSample = 0
         correctSample = 0
         logging.info("Do validation")
         for i in range(len(cifar10_test_iter)):
@@ -133,37 +139,36 @@ def trainCls(config):
             _, predicted = out.max(1)
             totalSample += targets.size(0)
             correctSample += predicted.eq(targets).sum().item()
-        logging.info("epoch: {}, loss: {}, acc: {}".format(e, valLoss / (i + 1), correctSample / totalSample))
+        logging.info("epoch: {}, loss: {}, acc: {} of total {} pics.".format(e, valLoss / (i + 1), correctSample / totalSample, totalSample))
 
         # save checkpoint
+        if (e % config.saveInterval == 0):
+            saveName = config.savePrefix + getDateString() + "_" + config.network + "_" + str(e) + ".pth"
+            torch.save(myCls.state_dict(), saveName)
     return
 
 def getTimeString():
     timeString = time.strftime("%Y-%m-%d_%H:%M:%S", time.localtime())
     return timeString
 
-logging.basicConfig(filename=os.path.realpath(__file__) + "/../log/" + getTimeString() + ".log")
-bannerLogger = logging.getLogger()
-bannerLogger.setLevel(logging.INFO)
-def console_output():
+def getDateString():
+    dateString = time.strftime("%Y-%m-%d", time.localtime())
+    return dateString
+
+def console_output(config):
+    logging.basicConfig(filename=config.logPath + getTimeString() + ".log")
+    bannerLogger = logging.getLogger()
+    bannerLogger.setLevel(logging.INFO)
+
     # define a Handler which writes INFO messages or higher to the sys.stderr
     console = logging.StreamHandler()
     console.setLevel(logging.INFO)
-    # set a format which is simpler for console use
-    # formatter = logging.Formatter('LINE %(lineno)-4d : %(levelname)-8s %(message)s')
-    # tell the handler to use this format
-    # console.setFormatter(formatter)
     logging.getLogger('').addHandler(console)
 
 if __name__ == "__main__":
-    # loss = nn.CrossEntropyLoss()
-    # # input, NxC=2x3
-    # input = torch.randn(2, 3, requires_grad=True)
-    # # target, N
-    # target = torch.empty(2, dtype=torch.long).random_(3)
-    # output = loss(input, target)
-    # output.backward()
-
-    console_output()
     config = parsArgs()
+    console_output(config)
+    logging.info(config)
+
+    # train loop
     trainCls(config)
